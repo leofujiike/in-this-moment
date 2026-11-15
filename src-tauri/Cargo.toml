@@ -1,0 +1,26 @@
+[package]
+name = "block-timer"
+version = "0.2.0"
+edition = "2021"
+
+[lib]
+name = "block_timer_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-notification = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+time = "0.3"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+
+# macOS：届いた通知を消すため（tauri-plugin-notification は macOS で消せない）。plugin が使う mac-notification-sys と同じ objc2 系
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-foundation = { version = "0.3", features = ["NSUserNotification", "NSArray", "NSDate"] }

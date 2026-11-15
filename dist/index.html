@@ -1,0 +1,892 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>In This Moment</title>
+<style>
+  :root { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; -webkit-font-smoothing: antialiased; -webkit-user-select: none; user-select: none; background: var(--bg); color: var(--fg); }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: default; border: 0; background: none; padding: 0; }
+  svg { display: block; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  .hidden { display: none !important; }
+
+  /* 区切りつき進捗バー。両OS共通の骨組み */
+  .meter { display: grid; grid-template-columns: repeat(var(--n), 1fr); gap: 2px; margin-top: 6px; }
+  .meter.dense { gap: 1px; }
+  .meter i { height: 4px; border-radius: 2px; background: var(--track); }
+  .meter i.on { background: var(--meter-color, var(--accent)); opacity: var(--shade, 1); }
+
+  input[aria-invalid="true"] { border-color: var(--danger, var(--error)) !important; }
+
+  /* ================= macOS（Human Interface Guidelines） ================= */
+  .mac {
+    --bg: #ffffff; --fg: rgba(0,0,0,.85); --fg2: rgba(0,0,0,.5); --sep: rgba(0,0,0,.08);
+    --accent: #007aff; --track: rgba(0,0,0,.1); --hover: rgba(0,0,0,.05);
+    --panel: #f5f5f7; --field: #ffffff; --field-border: rgba(0,0,0,.15); --danger: #ff3b30; --dim: rgba(0,0,0,.2);
+    font: 13px/1.38 -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+  }
+  [data-theme="dark"] .mac {
+      --bg: #1e1e1e; --fg: rgba(255,255,255,.88); --fg2: rgba(255,255,255,.55); --sep: rgba(255,255,255,.08);
+      --accent: #0a84ff; --track: rgba(255,255,255,.15); --hover: rgba(255,255,255,.06);
+      --panel: #2b2b2d; --field: rgba(255,255,255,.07); --field-border: rgba(255,255,255,.12); --danger: #ff453a; --dim: rgba(0,0,0,.4);
+  }
+  .mac .toolbar { display: flex; justify-content: flex-end; gap: 2px; padding: 8px 10px 2px; }
+  .mac .tool { width: 28px; height: 28px; border-radius: 14px; display: grid; place-items: center; color: var(--fg2); }
+  .mac .tool:hover { background: var(--hover); color: var(--fg); }
+  .mac ul { padding: 0 8px 12px; }
+  .mac li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; position: relative; }
+  .mac li:hover { background: var(--hover); }
+  .mac li + li::before { content: ""; position: absolute; top: 0; left: 10px; right: 10px; border-top: 1px solid var(--sep); }
+  .mac li:hover::before, .mac li:hover + li::before { border-color: transparent; }
+  .mac .text { flex: 1; min-width: 0; }
+  .mac .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mac .sub { color: var(--fg2); font-size: 11px; margin-top: 1px; font-variant-numeric: tabular-nums; }
+  .mac .act { width: 28px; height: 28px; border-radius: 14px; display: grid; place-items: center; color: var(--fg2); flex: none; }
+  .mac .act:hover { background: var(--hover); color: var(--fg); }
+  .mac .act.running { color: var(--accent); }
+  .mac .empty { color: var(--fg2); text-align: center; padding: 48px 16px; }
+  .mac .msg { margin: 0 18px 8px; color: var(--danger); font-size: 11px; }
+
+  .mac .scrim { position: fixed; inset: 0; background: var(--dim); display: flex; align-items: flex-start; justify-content: center; padding-top: 10px; }
+  .mac .sheet { width: calc(100% - 24px); background: var(--panel); border-radius: 16px; padding: 18px 18px 16px; box-shadow: 0 12px 40px rgba(0,0,0,.25); border: 1px solid var(--sep); }
+  .mac .sheet h2 { font-size: 13px; font-weight: 600; margin: 0 0 14px; text-align: center; }
+  .mac .field { margin-bottom: 12px; }
+  .mac .field.plain label { margin-bottom: 6px; }
+  .mac .field label { display: block; color: var(--fg2); font-size: 11px; margin-bottom: 4px; }
+  .mac .field input, .mac .field select { width: 100%; height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--field-border); background: var(--field); outline: none; }
+  .mac .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+  .mac .duration { display: grid; grid-template-columns: 72px 1fr; gap: 8px; }
+  .mac .err { color: var(--danger); font-size: 11px; margin-top: 4px; }
+  .mac .buttons { display: flex; align-items: center; gap: 8px; margin-top: 18px; }
+  .mac .buttons .spacer { flex: 1; }
+  .mac .btn { height: 24px; padding: 0 14px; border-radius: 12px; background: var(--hover); box-shadow: inset 0 0 0 1px var(--field-border); }
+  .mac .btn.primary { background: var(--accent); color: #fff; box-shadow: none; }
+  .mac .segmented { display: flex; padding: 2px; border-radius: 7px; background: var(--hover); box-shadow: inset 0 0 0 1px var(--sep); }
+  .mac .segmented button { flex: 1; height: 22px; border-radius: 5px; }
+  .mac .segmented button[aria-pressed="true"] { background: var(--field); box-shadow: 0 1px 2px rgba(0,0,0,.15), inset 0 0 0 1px var(--field-border); font-weight: 500; }
+  .mac .btn.destructive { background: none; box-shadow: none; color: var(--danger); padding: 0 4px; }
+
+  /* ================= Android（Material 3 Expressive） ================= */
+  .android {
+    --bg: #fef7ff; --fg: #1d1b20; --fg2: #49454f; --accent: #6750a4; --on-accent: #ffffff;
+    --track: #e8def8; --container: #eaddff; --on-container: #21005d; --tonal: #e8def8; --on-tonal: #1d192b;
+    --surface-high: #f3edf7; --outline: #79747e; --outline-variant: #cac4d0; --error: #b3261e; --scrim: rgba(0,0,0,.32);
+    font: 16px/1.5 Roboto, "Noto Sans JP", system-ui, sans-serif;
+  }
+  [data-theme="dark"] .android {
+      --bg: #141218; --fg: #e6e0e9; --fg2: #cac4d0; --accent: #d0bcff; --on-accent: #381e72;
+      --track: #4a4458; --container: #4f378b; --on-container: #eaddff; --tonal: #4a4458; --on-tonal: #e8def8;
+      --surface-high: #2b2930; --outline: #938f99; --outline-variant: #49454f; --error: #f2b8b5; --scrim: rgba(0,0,0,.5);
+  }
+  .android .appbar .grow { flex: 1; }
+  .android .appbar .tool { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 24px; color: var(--fg2); margin-right: -12px; }
+  .android .appbar { height: 64px; display: flex; align-items: center; padding: 0 16px; padding-top: env(safe-area-inset-top); font-size: 22px; line-height: 28px; }
+  .android #main { padding-bottom: 104px; }
+  .android li { display: flex; align-items: center; gap: 16px; min-height: 72px; padding: 8px 16px 8px 16px; }
+  .android li:active { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+  .android .text { flex: 1; min-width: 0; }
+  .android .title { font-size: 16px; line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .android .sub { font-size: 14px; line-height: 20px; color: var(--fg2); font-variant-numeric: tabular-nums; }
+  .android .act { width: 48px; height: 48px; display: grid; place-items: center; flex: none; }
+  .android .act span { width: 40px; height: 40px; border-radius: 20px; display: grid; place-items: center; background: var(--tonal); color: var(--on-tonal); }
+  .android .act.running span { background: var(--accent); color: var(--on-accent); }
+  .android .empty { color: var(--fg2); text-align: center; padding: 64px 24px; }
+  .android .msg { margin: 0 16px 8px; color: var(--error); font-size: 14px; }
+  .android .fab { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); width: 56px; height: 56px; border-radius: 16px;
+    display: grid; place-items: center; background: var(--container); color: var(--on-container); box-shadow: 0 3px 6px rgba(0,0,0,.2), 0 1px 3px rgba(0,0,0,.15); }
+
+  .android .scrim { position: fixed; inset: 0; background: var(--scrim); display: flex; align-items: flex-end; }
+  .android .sheet { width: 100%; background: var(--surface-high); border-radius: 28px 28px 0 0; padding: 8px 24px calc(16px + env(safe-area-inset-bottom)); }
+  .android .handle { width: 32px; height: 4px; border-radius: 2px; background: var(--outline); opacity: .4; margin: 14px auto 20px; }
+  .android .sheet h2 { font-size: 22px; line-height: 28px; font-weight: 400; margin: 0 0 20px; }
+  .android .field { position: relative; margin-bottom: 20px; }
+  .android .field label { position: absolute; top: -9px; left: 12px; padding: 0 4px; font-size: 12px; line-height: 16px; color: var(--fg2); background: var(--surface-high); }
+  .android .field input, .android .field select { width: 100%; height: 56px; padding: 0 16px; border-radius: 4px; border: 1px solid var(--outline); background: transparent; outline: none; }
+  .android .field input:focus, .android .field select:focus { border: 2px solid var(--accent); padding: 0 15px; }
+  .android .field:focus-within label { color: var(--accent); }
+  .android .duration { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .android .err { color: var(--error); font-size: 12px; line-height: 16px; margin: 4px 16px 0; }
+  .android .buttons { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .android .buttons .spacer { flex: 1; }
+  .android .btn { height: 40px; padding: 0 16px; border-radius: 20px; color: var(--accent); font-size: 14px; font-weight: 500; letter-spacing: .1px; }
+  .android .btn.primary { background: var(--accent); color: var(--on-accent); padding: 0 24px; }
+  .android .segmented { display: flex; }
+  .android .segmented button { flex: 1; height: 40px; border: 1px solid var(--outline); margin-left: -1px; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .android .segmented button:first-child { border-radius: 20px 0 0 20px; margin-left: 0; }
+  .android .segmented button:last-child { border-radius: 0 20px 20px 0; }
+  .android .segmented button[aria-pressed="true"] { background: var(--tonal); color: var(--on-tonal); }
+  .android .segmented button[aria-pressed="true"]::before { content: "✓"; font-size: 14px; }
+  .android .field.plain label { position: static; background: none; padding: 0; display: block; margin-bottom: 8px; }
+  .android .btn.destructive { color: var(--error); padding: 0 12px; }
+
+  /* ---- 選択行・チェック・付箋・色・トースト・フローティング ---- */
+  li.sel { box-shadow: inset 0 0 0 2px var(--accent); }
+  .check { display: flex; align-items: center; gap: 8px; }
+  .check input { accent-color: var(--accent); margin: 0; }
+  .check input:disabled + span { opacity: .4; }
+  .hhead { color: var(--fg2); font-weight: 600; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 6px 14px; border-radius: 16px; font-size: 12px; max-width: calc(100% - 32px); }
+  .keys { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .keys td { padding: 3px 4px; border-top: 1px solid var(--track); vertical-align: top; }
+  .keys td:first-child { white-space: nowrap; font-family: ui-monospace, Menlo, monospace; color: var(--accent); }
+  .keys-scroll { max-height: 60vh; overflow: auto; }
+  body.float { margin: 0; background: var(--bg); overflow: hidden; }
+  .float-root { box-sizing: border-box; padding: 4px 8px; }
+  body.float #main { padding: 0; min-height: 0; }
+  .fwrap { cursor: default; }
+  .fbtns { position: fixed; top: 4px; right: 8px; display: flex; opacity: .45; z-index: 1; }
+  body.float:hover .fbtns { opacity: 1; }
+  .fbtn { width: 16px; height: 16px; border-radius: 8px; display: grid; place-items: center; color: var(--fg2); background: var(--bg); }
+  .frow { min-height: 0; overflow: hidden; }
+  .frow + .frow, body.float .note + #main:not(:empty) { margin-top: 4px; }
+  .fline { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+  .fname { flex: 1; min-width: 0; font-size: 11px; line-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .frem { flex: none; font-size: 10px; color: var(--fg2); font-variant-numeric: tabular-nums; }
+  .fempty { font-size: 11px; color: var(--fg2); line-height: 26px; }
+  .resize-edge { position: fixed; z-index: 10; }
+  .resize-edge.w, .resize-edge.e { top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+  .resize-edge.w { left: 0; } .resize-edge.e { right: 0; }
+  .resize-edge.corner { width: 10px; height: 10px; }
+  .resize-edge.nw { top: 0; left: 0; cursor: nwse-resize; }
+  .resize-edge.ne { top: 0; right: 0; cursor: nesw-resize; }
+  .resize-edge.sw { bottom: 0; left: 0; cursor: nesw-resize; }
+  .resize-edge.se { bottom: 0; right: 0; cursor: nwse-resize; }
+  body.float.fixed .resize-edge.corner { display: none; }
+  .sheet { max-height: calc(100dvh - 20px); overflow-y: auto; }
+  /* 高さ固定オフは、従来と同じく窓の大きさに合わせて拡大する。 */
+  body.float:not(.fixed) .float-root { height: 100vh; display: flex; flex-direction: column; }
+  body.float:not(.fixed) #main { flex: 1 1 0; display: flex; flex-direction: column; }
+  body.float:not(.fixed) .fwrap { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  body.float:not(.fixed) .frow { flex: 1 1 0; display: flex; flex-direction: column; justify-content: center; }
+  body.float:not(.fixed) .frow + .frow { margin-top: 0; }
+  body.float:not(.fixed) .fname { font-size: clamp(11px, calc(var(--rh, 26px) * .3), 28px); line-height: 1.2; }
+  body.float:not(.fixed) .frem { font-size: clamp(10px, calc(var(--rh, 26px) * .27), 24px); }
+  body.float:not(.fixed) .meter { height: auto; }
+  body.float:not(.fixed) .meter i { height: clamp(4px, calc(var(--rh, 26px) * .22), 24px); border-radius: clamp(2px, calc(var(--rh, 26px) * .06), 6px); }
+  .mac .check { margin-bottom: 12px; }
+  .mac .times { grid-template-columns: 1fr 1fr; }
+  .mac .hhead { font-size: 11px; padding: 12px 10px 4px; }
+  .mac .toolbar .grow { flex: 1; font-weight: 600; align-self: center; text-align: center; }
+  .android .check { margin-bottom: 20px; min-height: 40px; }
+  .android .check input { width: 18px; height: 18px; }
+  .android .hhead { font-size: 14px; color: var(--accent); padding: 16px 16px 4px; }
+  .android .appbar .tool + .tool { margin-left: 12px; }
+
+  /* ---- 色：保存するのはキーだけ。見た目はここで決める ---- */
+  :root {
+    --c-red: #E5484D; --c-orange: #F76B15; --c-yellow: #E2A336; --c-green: #30A46C;
+    --c-teal: #12A594; --c-blue: #0090FF; --c-purple: #8E4EC6; --c-pink: #D6409F;
+  }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--meter-color); margin-right: 6px; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 12px; padding: 4px 4px 0; }
+  .sw { width: 22px; height: 22px; border-radius: 50%; background: var(--meter-color); box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); position: relative; }
+  .sw[aria-checked="true"] { box-shadow: 0 0 0 2px var(--panel, var(--surface-high, var(--bg))), 0 0 0 4px var(--meter-color, var(--fg2)); }
+  .sw.none { background: transparent; box-shadow: inset 0 0 0 1.5px var(--fg2); }
+  .sw.none::after { content: ""; position: absolute; left: 4px; right: 4px; top: 50%; border-top: 1.5px solid var(--fg2); transform: rotate(-45deg); }
+  .sw.none[aria-checked="true"] { box-shadow: inset 0 0 0 1.5px var(--fg2), 0 0 0 2px var(--panel, var(--surface-high, var(--bg))), 0 0 0 4px var(--fg2); }
+
+  .sw.auto { background: linear-gradient(90deg, var(--c-blue), var(--c-green), var(--c-yellow), var(--c-orange), var(--c-red)); }
+  .sw.auto[aria-checked="true"] { box-shadow: inset 0 0 0 1.5px var(--fg2), 0 0 0 2px var(--panel, var(--surface-high, var(--bg))), 0 0 0 4px var(--fg2); }
+  .dot.auto { background: linear-gradient(90deg, var(--c-blue), var(--c-red)); }
+
+  /* ---- 付箋：メイン画面とフローティングで共通 ---- */
+  .mac { --note-bg: #fff6cf; --note-line: rgba(0,0,0,.08); }
+  [data-theme="dark"] .mac { --note-bg: #3b3622; --note-line: rgba(255,255,255,.1); }
+  .android { --note-bg: #fff1b8; --note-line: rgba(0,0,0,.08); }
+  [data-theme="dark"] .android { --note-bg: #4a4220; --note-line: rgba(255,255,255,.1); }
+  .note { margin: 4px 12px 8px; padding: 10px 12px; border-radius: 10px; background: var(--note-bg); box-shadow: inset 0 0 0 1px var(--note-line); }
+  .android .note { margin: 4px 16px 12px; border-radius: 16px; padding: 14px 16px; }
+  .note-text { min-height: 1.5em; outline: none; font-weight: 600; word-break: break-all; white-space: pre-wrap; -webkit-user-select: text; user-select: text; cursor: text; }
+  .note-text:empty::before { content: attr(data-ph); color: var(--fg2); font-weight: 400; }
+  .note-text:focus { box-shadow: 0 1px 0 var(--accent); }
+  .nbar { margin-top: 8px; }
+  .nbar .nline { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--fg2); font-variant-numeric: tabular-nums; }
+  .android .nbar .nline { font-size: 14px; }
+  .nbar .meter { margin-top: 4px; }
+  body.float .note { margin: 0; padding: 4px 8px; }
+  body.float .note-text { font-size: 12px; }
+  body.float .nbar { margin-top: 4px; }
+  body.float .nbar .nline { line-height: 14px; }
+  body.float .meter { height: 8px; margin-top: 2px; }
+  body.float .meter i { height: 8px; border-radius: 1px; }
+  .rowbtn { width: 16px; height: 16px; flex: none; margin-left: auto; display: grid; place-items: center; border-radius: 8px; color: var(--fg2); opacity: 0; }
+  .nbar:hover .rowbtn, .frow:hover .rowbtn, .rowbtn:focus-visible { opacity: 1; }
+  .rowbtn:hover { background: var(--hover); color: var(--fg); }
+  body.float .nline { justify-content: flex-start; }
+  body.float .nline > :first-child { flex: 1; min-width: 0; }
+  .done-cells { font-size: 14px; line-height: 18px; white-space: nowrap; overflow: hidden; }
+  body.float:not(.fixed) .done-cells { font-size: clamp(12px, calc(var(--rh, 26px) * .5), 28px); }
+  body.float.fixed .float-root { max-height: 100vh; overflow-y: auto; }
+  .pins { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .pins:empty { display: none; }
+  .pin { height: 20px; padding: 0 8px; border-radius: 10px; font-size: 11px; background: var(--hover); color: var(--fg); }
+  .pin:disabled { opacity: .4; }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+<section id="note" class="note">
+  <div id="note-text" class="note-text" role="textbox" aria-label="いま何をやるか" data-ph="いま何をやる？" spellcheck="false"></div>
+  <div id="note-bars"></div>
+</section>
+<main id="main"></main>
+<div id="sheet-root"></div>
+<div id="toast-root"></div>
+<script>
+const { invoke } = window.__TAURI__.core;
+const PLATFORM = /Android/i.test(navigator.userAgent) ? "android" : "mac";
+const FLOAT = new URLSearchParams(location.search).get("view") === "float";
+document.body.classList.add(PLATFORM);
+if (FLOAT) document.body.classList.add("float");
+
+// 外観：light（標準）/ dark / auto（OSに合わせる）。この端末の中だけに保存する。
+const FLOAT_FIXED_KEY = "block-timer-float-fixed";
+function floatFixed() {
+  try { return localStorage.getItem(FLOAT_FIXED_KEY) !== "0"; } catch { return true; }
+}
+function setFloatFixed(on) {
+  try { localStorage.setItem(FLOAT_FIXED_KEY, on ? "1" : "0"); } catch {}
+}
+const THEME_KEY = "block-timer-theme";
+const THEME_LABEL = { light: "ライト", dark: "ダーク", auto: "自動" };
+const darkQuery = matchMedia("(prefers-color-scheme: dark)");
+function lsGet(k, d) { try { return localStorage.getItem(k) || d; } catch { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
+function getTheme() { return lsGet(THEME_KEY, "light"); }
+function applyTheme() {
+  const t = getTheme();
+  const dark = t === "dark" || (t === "auto" && darkQuery.matches);
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+}
+function setTheme(t) { lsSet(THEME_KEY, t); applyTheme(); }
+darkQuery.addEventListener("change", applyTheme);
+window.addEventListener("storage", e => { if (e.key === THEME_KEY) applyTheme(); });
+applyTheme();
+
+const FACTOR = { min: 60, hour: 3600, day: 86400, year: 31557600 };
+const UNIT_LABEL = { min: "分", hour: "時間", day: "日", year: "年" };
+const MAX_SECS = 100 * FACTOR.year;
+const NOTIFY_LABEL = { standard: "標準（75・50・25・10%）", "25": "25%ごと", "10": "10%ごと" };
+const NOTIFY_SHORT = { standard: "標準", "25": "25%ごと", "10": "10%ごと" };
+// 色のキー（見た目は CSS の --c-xxx）。Rust 側の timer::COLORS と同じ並び
+const COLOR_AUTO = "auto";
+const COLORS = ["red", "orange", "yellow", "green", "teal", "blue", "purple", "pink"];
+const COLOR_LABEL = { red: "赤", orange: "オレンジ", yellow: "黄", green: "緑", teal: "ティール", blue: "青", purple: "紫", pink: "ピンク" };
+const FOCUS_MAX = 60;
+
+const ICON = {
+  play: '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M5 3.2v9.6c0 .5.5.8.9.5l7.4-4.8a.6.6 0 0 0 0-1L5.9 2.7c-.4-.3-.9 0-.9.5Z" fill="currentColor"/></svg>',
+  close: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="m4 4 8 8M12 4l-8 8"/></svg>',
+  stop: '<svg width="16" height="16" viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="9" rx="2" fill="currentColor"/></svg>',
+  gear: `<svg width="${PLATFORM === "android" ? 24 : 16}" height="${PLATFORM === "android" ? 24 : 16}" viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.6h4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5zM13 15.4a3.5 3.5 0 1 1 0-6.9 3.5 3.5 0 0 1 0 6.9z" transform="translate(-1 0)" fill="currentColor"/></svg>`,
+  // フローティング（窓の中の小窓）・アプリを開く（窓から矢印）・終了日時を決めて始める（時計）
+  float: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.7" y="2.7" width="12.6" height="10.6" rx="1.5"/><rect x="8" y="8.2" width="4.6" height="3.4" rx=".6" fill="currentColor" stroke="none"/></svg>',
+  app: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5"/><path d="M12 10v2.5a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1H6"/></svg>',
+  clock: PLATFORM === "android"
+    ? '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>'
+    : '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.2 1.4"/></svg>',
+  plus: PLATFORM === "android"
+    ? '<svg width="24" height="24" viewBox="0 0 24 24"><path d="M11 13H5v-2h6V5h2v6h6v2h-6v6h-2z" fill="currentColor"/></svg>'
+    : '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+};
+
+let view = { timers: [], running: [], focus: "", finished: [], done_gimmick: { kind: "off" } };
+let message = "";
+let sheetOpen = false;
+let sel = 0;                      // 選択中の行（キー操作）
+let items = [];                   // 今の画面で選べる行
+const bar = document.getElementById("bar");
+const main = document.getElementById("main");
+const noteEl = document.getElementById("note");
+const noteText = document.getElementById("note-text");
+const noteBars = document.getElementById("note-bars");
+const pinsEl = FLOAT ? document.createElement("div") : null;
+if (pinsEl) { pinsEl.id = "note-pins"; pinsEl.className = "pins"; noteText.after(pinsEl); }
+const sheetRoot = document.getElementById("sheet-root");
+const toastRoot = document.getElementById("toast-root");
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+const hm = m => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
+const fmtDaily = d => `毎日 ${hm(d.start_min)}–${hm(d.end_min)}`;
+const dailyLen = d => (((d.end_min - d.start_min + 1440) % 1440) || 1440) * 60;
+const isPeriod = t => !!(t.start_at || t.daily);
+function lengthText(t) { return Math.round(t.duration_secs / FACTOR[t.unit]) + UNIT_LABEL[t.unit]; }
+// 色のキー → 進捗バーなどに渡す CSS 変数。知らないキーは無視する（既定の色）
+const cstyle = key => (COLORS.includes(key) ? ` style="--meter-color:var(--c-${key})"` : "");
+const SHADE_OPACITY = [0.45, 0.6, 0.75, 0.9, 1];
+function meterHtml(r) {
+  const n = r.segments, lit = r.lit;
+  const color = COLORS.includes(r.color) ? `--meter-color:var(--c-${r.color});` : '';
+  let cells = '';
+  for (let i = 0; i < n; i++) cells += i < lit ? '<i class="on"></i>' : '<i></i>';
+  return `<div class="meter${n > 30 ? ' dense' : ''}" style="--n:${n};--shade:${SHADE_OPACITY[r.shade]};${color}" aria-hidden="true">${cells}</div>`;
+}
+const nowSecs = () => Math.floor(Date.now() / 1000);
+// 終わる時刻の表記：今日なら「15:30」、別の日なら「11/5 15:30」
+function endText(sec) {
+  const d = new Date(sec * 1000), t = new Date();
+  const hhmm = `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return d.toDateString() === t.toDateString() ? hhmm : `${d.getMonth() + 1}/${d.getDate()} ${hhmm}`;
+}
+
+function toast(text, ms = 1500) {
+  toastRoot.innerHTML = text ? `<div class="toast" role="status">${esc(text)}</div>` : "";
+  clearTimeout(toast.t);
+  if (text && ms) toast.t = setTimeout(() => (toastRoot.innerHTML = ""), ms);
+}
+
+// ================= 付箋（メイン画面・フローティング共通） =================
+// 1枚だけ。実行中でも書き換えられる。編集中は画面の更新で上書きしない。
+noteText.setAttribute("contenteditable", "plaintext-only");
+if (noteText.contentEditable !== "plaintext-only") noteText.contentEditable = "true";
+
+function syncNote() {
+  if (document.activeElement !== noteText && noteText.textContent !== view.focus) noteText.textContent = view.focus;
+}
+function caretToEnd() {
+  const r = document.createRange();
+  r.selectNodeContents(noteText); r.collapse(false);
+  const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+}
+function clampNote() {
+  const t = noteText.textContent;
+  const cut = [...t.replace(/[\r\n]+/g, " ")].slice(0, FOCUS_MAX).join("");
+  if (cut !== t) { noteText.textContent = cut; caretToEnd(); }
+}
+async function commitNote() {
+  const text = noteText.textContent.replace(/\s+/g, " ").trim();
+  if (text !== view.focus) {
+    try { view.focus = await invoke("set_focus", { text }); }
+    catch (e) { toast(String(e), 3000); }
+  }
+  noteText.textContent = view.focus;
+}
+noteText.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    if (e.isComposing || e.keyCode === 229) return; // 変換の確定
+    e.preventDefault(); noteText.blur();            // blur で確定
+  } else if (e.key === "Escape") {
+    e.preventDefault(); noteText.textContent = view.focus; noteText.blur();
+  }
+});
+noteText.addEventListener("input", e => { if (!e.isComposing) clampNote(); if (FLOAT) fitFloat(); });
+noteText.addEventListener("compositionend", () => { clampNote(); if (FLOAT) fitFloat(); });
+noteText.addEventListener("blur", commitNote);
+
+const rowBtn = (kind, id) => kind === "stop"
+  ? `<button class="rowbtn" data-stop="${esc(id)}" aria-label="停止" title="停止">${ICON.stop}</button>`
+  : `<button class="rowbtn" data-dismiss="${esc(id)}" aria-label="消す" title="消す">${ICON.close}</button>`;
+function doneMeter(f) {
+  return f.cells == null
+    ? meterHtml({ segments: f.segments, lit: 0, shade: 4, color: null })
+    : `<div class="done-cells" aria-hidden="true">${esc(f.cells)}</div>`;
+}
+function renderPins() {
+  const running = new Set(view.running.map(r => r.def_id));
+  const pins = view.timers.filter(t => t.pin_float && !isPeriod(t)).sort((a, b) => a.duration_secs - b.duration_secs);
+  pinsEl.innerHTML = pins.map(t => `<button class="pin" data-start="${esc(t.id)}"${running.has(t.id) ? " disabled" : ""}>${esc(lengthText(t))}</button>`).join("");
+}
+function renderNoteBars() {
+  const work = view.running.filter(r => !r.period && (!FLOAT || r.show_in_bar)).sort((a, b) => a.remaining_secs - b.remaining_secs);
+  noteBars.innerHTML = work.map(r => `<div class="nbar"><div class="nline"><span>${esc(r.length)} · 残り${esc(r.remaining)}（${r.percent}%）</span>${r.once ? `<span>〜${esc(endText(r.end_at))}</span>` : ""}${FLOAT ? rowBtn("stop", r.def_id) : ""}</div>${meterHtml(r)}</div>`).join("")
+    + (FLOAT ? view.finished.filter(f => !f.period).map(f => `<div class="nbar done"><div class="nline"><span>${esc(f.length)} · 時間です</span>${f.once ? `<span>〜${esc(endText(f.end_at))}</span>` : ""}${rowBtn("dismiss", f.def_id)}</div>${doneMeter(f)}</div>`).join("") : "");
+}
+
+// ================= フローティング表示（Mac） =================
+// 右上のボタン：アプリを開く（カーソルを乗せたときだけ見える）。閉じるのはメニューの「フローティング表示」から。
+const FLOAT_BTNS = `<div class="fbtns">
+  <button class="fbtn" data-view="app" aria-label="アプリを開く" title="アプリを開く">${ICON.app}</button></div>`;
+function switchView(to) { invoke("switch_view", { to }).catch(e => toast(String(e), 3000)); }
+if (FLOAT) document.body.addEventListener("click", e => {
+  const v = e.target.closest("[data-view]");
+  if (v) return switchView(v.dataset.view);
+  const b = e.target.closest("[data-stop],[data-dismiss],[data-start]");
+  if (b) floatAction(b);
+});
+async function floatAction(b) {
+  try {
+    if (b.dataset.stop) await invoke("stop_timer", { id: b.dataset.stop });
+    else if (b.dataset.dismiss) await invoke("dismiss_finished", { id: b.dataset.dismiss });
+    else await invoke("start_timer", { id: b.dataset.start });
+  } catch (err) { toast(String(err), 3000); }
+  await renderFloat();
+}
+
+let floatRoot;
+let lastFit = "";
+const FLOAT_ROW_PX = 28;
+let lastCount = null;
+let floatRendering = false;
+let floatRerender = false;
+function fitFloat() {
+  if (!FLOAT || PLATFORM !== "mac") return;
+  const fixed = floatFixed();
+  document.body.classList.toggle("fixed", fixed);
+  const height = Math.ceil(Math.max(floatRoot.getBoundingClientRect().height, floatRoot.scrollHeight));
+  const key = `${fixed}:${height}`;
+  if (key === lastFit) return;
+  lastFit = key;
+  invoke("fit_float", { fixed, height }).catch(e => { lastFit = ""; toast(String(e), 3000); });
+}
+if (FLOAT && PLATFORM === "mac") {
+  const floatWin = window.__TAURI__.window.getCurrentWindow();
+  document.addEventListener("mousedown", e => {
+    if (e.button !== 0 || e.target.closest("button")) return;
+    const edge = e.target.closest(".resize-edge");
+    if (edge) {
+      e.preventDefault();
+      floatWin.startResizeDragging(edge.dataset.dir).catch(e => toast(String(e), 3000));
+      return;
+    }
+    if (e.target.closest(".note-text")) return;
+    floatWin.startDragging().catch(e => toast(String(e), 3000));
+  });
+  window.addEventListener("storage", e => { if (e.key === FLOAT_FIXED_KEY || e.key === null) fitFloat(); });
+}
+if (FLOAT) {
+  floatRoot = document.createElement("div");
+  floatRoot.className = "float-root";
+  noteEl.before(floatRoot);
+  floatRoot.append(noteEl, main);
+  floatRoot.insertAdjacentHTML("beforeend", `
+    <div class="resize-edge w" data-dir="West"></div><div class="resize-edge e" data-dir="East"></div>
+    <div class="resize-edge corner nw" data-dir="NorthWest"></div><div class="resize-edge corner ne" data-dir="NorthEast"></div>
+    <div class="resize-edge corner sw" data-dir="SouthWest"></div><div class="resize-edge corner se" data-dir="SouthEast"></div>`);
+  document.body.insertAdjacentHTML("beforeend", FLOAT_BTNS);
+}
+async function renderFloat() {
+  if (floatRendering) { floatRerender = true; return; }
+  floatRendering = true;
+  try {
+    view = await invoke("get_state");
+    syncNote();
+    renderNoteBars();
+    const period = view.running.filter(r => r.period && r.show_in_bar)
+      .sort((a, b) => a.remaining_secs - b.remaining_secs);
+    const finished = view.finished.filter(f => f.period);
+    const frow = r => `<div class="frow"><div class="fline"><span class="fname">${esc(r.label)}</span><span class="frem">残り${esc(r.remaining)}（${r.percent}%）</span>${rowBtn("stop", r.def_id)}</div>${meterHtml(r)}</div>`;
+    const done = f => `<div class="frow done"><div class="fline"><span class="fname">${esc(f.label)}</span><span class="frem">時間です</span>${rowBtn("dismiss", f.def_id)}</div>${doneMeter(f)}</div>`;
+    main.innerHTML = period.length || finished.length ? `<div class="fwrap">${period.map(frow).join("")}${finished.map(done).join("")}</div>` : "";
+    renderPins();
+    document.body.style.setProperty("--rh", `${Math.max(0, innerHeight - noteEl.offsetHeight - 24) / Math.max(period.length + finished.length, 1)}px`);
+    const count = view.running.filter(r => r.show_in_bar).length + view.finished.length + (pinsEl.childElementCount ? 1 : 0);
+    if (PLATFORM === "mac" && !floatFixed() && lastCount !== null && count !== lastCount) {
+      await invoke("resize_float_by", { delta: (count - lastCount) * FLOAT_ROW_PX }).catch(e => toast(String(e), 3000));
+    }
+    lastCount = count;
+    fitFloat();
+  } catch (e) { toast(String(e), 3000); }
+  finally {
+    floatRendering = false;
+    if (floatRerender) { floatRerender = false; renderFloat(); }
+  }
+}
+
+// ================= メイン画面 =================
+async function refresh() {
+  try { view = await invoke("get_state"); } catch (e) { message = String(e); }
+  render();
+}
+
+function markSel() {
+  sel = Math.max(0, Math.min(sel, items.length - 1));
+  main.querySelectorAll("[data-row]").forEach(el => el.classList.toggle("sel", Number(el.dataset.row) === sel && kbd));
+}
+
+async function toggle(id, running) {
+  message = "";
+  try { await invoke(running ? "stop_timer" : "start_timer", { id }); } catch (e) { message = String(e); }
+  await refresh();
+}
+
+function toolbar(left, title, right) {
+  return PLATFORM === "android"
+    ? `<header class="appbar">${left}<span class="grow">${title}</span>${right}</header>`
+    : `<div class="toolbar">${left}${title ? `<span class="grow">${title}</span>` : ""}${right}</div>`;
+}
+const tool = (attr, icon, label, cls = "") => `<button class="tool ${cls}" ${attr} aria-label="${label}" title="${label}">${icon}</button>`;
+
+function actButton(id, running, label) {
+  return PLATFORM === "android"
+    ? `<button class="act${running ? " running" : ""}" data-toggle="${esc(id)}" aria-label="${label}"><span>${running ? ICON.stop : ICON.play}</span></button>`
+    : `<button class="act${running ? " running" : ""}" data-toggle="${esc(id)}" aria-label="${label}" title="${running ? "停止" : "開始"}">${running ? ICON.stop : ICON.play}</button>`;
+}
+
+// 1行：timer は保存してあるタイマー、run は実行中のもの。1回きり（once）は run だけ。
+function row(timer, run) {
+  items.push({ kind: "row", timer, run });
+  const i = items.length - 1;
+  const t = timer, r = run;
+  const period = t && isPeriod(t);
+  const color = t ? t.color : r.color;
+  const dot = color === COLOR_AUTO ? `<span class="dot auto"></span>` : color ? `<span class="dot"${cstyle(color)}></span>` : "";
+  let title, sub, btn = "", edit = "";
+  if (!t) {
+    title = `${esc(r.length)}　〜${esc(endText(r.end_at))}`;
+    sub = `残り${r.remaining}（${r.percent}%）`;
+    btn = actButton(r.def_id, true, "1回きりのタイマーを停止");
+  } else {
+    title = esc(period ? t.name : lengthText(t));
+    sub = r ? `残り${r.remaining}` : (t.daily ? fmtDaily(t.daily) : `${period ? lengthText(t) + " · " : ""}通知 ${NOTIFY_SHORT[t.notify]}`);
+    // 毎日タイマーは自動で始まるので、止めるボタンだけ出す
+    btn = t.daily && !r ? "" : actButton(t.id, !!r, `${period ? t.name : lengthText(t)}を${r ? "停止" : "開始"}`);
+    edit = ` data-edit="${esc(t.id)}"`;
+  }
+  // 期間タイマーはここに進捗を出す。作業タイマーは上の付箋に出る
+  const bars = r && period ? meterHtml(r) : "";
+  return `<li data-row="${i}"${edit}><div class="text"><div class="title">${dot}${title}</div><div class="sub">${esc(sub)}</div>${bars}</div>${btn}</li>`;
+}
+
+function render() {
+  items = [];
+  const right = PLATFORM === "android"
+    ? tool("data-until", ICON.clock, "終了日時を決めて始める") + tool("data-settings", ICON.gear, "設定")
+    : tool("data-tofloat", ICON.float, "フローティング表示にする") + tool("data-until", ICON.clock, "終了日時を決めて始める")
+      + tool("data-settings", ICON.gear, "設定") + tool("data-add", ICON.plus, "タイマーを追加");
+  bar.innerHTML = toolbar("", PLATFORM === "android" ? "In This Moment" : "", right);
+  syncNote();
+  renderNoteBars();
+
+  const runOf = id => view.running.find(r => r.def_id === id);
+  const once = view.running.filter(r => r.once).sort((a, b) => a.remaining_secs - b.remaining_secs);
+  const presets = view.timers.filter(t => !isPeriod(t)).sort((a, b) => a.duration_secs - b.duration_secs);
+  const periods = view.timers.filter(isPeriod);
+  const section = (label, rows) => rows.length ? `<div class="hhead">${esc(label)}</div><ul class="list">${rows.join("")}</ul>` : "";
+  let body = section("1回きり", once.map(r => row(null, r)))
+    + section("プリセット", presets.map(t => row(t, runOf(t.id))))
+    + section("期間", periods.map(t => row(t, runOf(t.id))));
+  if (!items.length) body = `<div class="empty">タイマーはまだありません。<br>＋から追加できます。</div>`;
+  main.innerHTML = (message ? `<p class="msg">${esc(message)}</p>` : "") + body
+    + (PLATFORM === "android" ? `<button class="fab" data-add aria-label="タイマーを追加">${ICON.plus}</button>` : "");
+  markSel();
+}
+
+if (!FLOAT) document.addEventListener("click", e => {
+  kbd = false;
+  const q = a => e.target.closest(`[${a}]`);
+  let el;
+  if ((el = q("data-toggle"))) {
+    const id = el.dataset.toggle;
+    return toggle(id, view.running.some(r => r.def_id === id));
+  }
+  if (q("data-add")) return openSheet(null);
+  if (q("data-until")) return openUntil();
+  if (q("data-settings")) return openSettings();
+  if (q("data-tofloat")) return switchView("float");
+  if ((el = q("data-edit")) && main.contains(el)) openSheet(view.timers.find(t => t.id === el.dataset.edit));
+});
+
+// ================= シート =================
+function options(map, sel) {
+  return Object.entries(map).map(([v, l]) => `<option value="${v}"${v === sel ? " selected" : ""}>${l}</option>`).join("");
+}
+function sheet(label, inner, form = false) {
+  sheetOpen = true;
+  const tag = form ? "form" : "div";
+  sheetRoot.innerHTML = `<div class="scrim" data-close>
+      <${tag} class="sheet" role="dialog" aria-modal="true" aria-label="${label}"${form ? " novalidate" : ""}>
+        ${PLATFORM === "android" ? '<div class="handle"></div>' : ""}<h2>${label}</h2>${inner}</${tag}></div>`;
+  sheetRoot.querySelectorAll("[data-close]").forEach(el => el.addEventListener("click", e => {
+    if (e.target === el) closeSheet();
+  }));
+  return sheetRoot.querySelector(".sheet");
+}
+function closeSheet() { sheetOpen = false; sheetRoot.innerHTML = ""; }
+function showErr(id, text) {
+  const el = document.getElementById(id);
+  if (!el) { if (text) toast(text, 3000); return; }
+  el.textContent = text;
+  el.classList.toggle("hidden", !text);
+}
+const timeVal = m => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+const parseTime = v => { const [h, m] = v.split(":").map(Number); return h * 60 + m; };
+const pad2 = n => String(n).padStart(2, "0");
+function dateVal(sec) { const d = new Date(sec * 1000); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
+function dateTimeVal(d) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
+
+const swatches = cur => ["", COLOR_AUTO, ...COLORS].map(c =>
+  `<button type="button" class="sw${c === COLOR_AUTO ? " auto" : c ? "" : " none"}" role="radio" aria-checked="${(cur || "") === c}" data-sw="${c}" aria-label="${c === COLOR_AUTO ? "自動（残りで青→赤）" : c ? COLOR_LABEL[c] : "色なし（既定）"}" title="${c === COLOR_AUTO ? "自動（残りで青→赤）" : c ? COLOR_LABEL[c] : "既定"}"${cstyle(c)}></button>`).join("");
+
+function openSheet(timer) {
+  const isNew = !timer;
+  const t = timer || { id: "", name: "", duration_secs: 1800, unit: "min", notify: "standard", show_in_bar: true, start_at: null, daily: null, color: null, segments: 20 };
+  const value = Math.round(t.duration_secs / FACTOR[t.unit]);
+  const d = t.daily || { start_min: 360, end_min: 1380 };
+  const today = dateVal(nowSecs());
+  const form = sheet(isNew ? "新しいタイマー" : "タイマーを編集", `
+        <label class="check"><input type="checkbox" id="f-period"${isPeriod(t) ? " checked" : ""}><span>期間タイマー</span></label>
+        <div class="field" id="w-name"><label for="f-name">名前</label>
+          <input id="f-name" maxlength="30" value="${esc(t.name)}" placeholder="例：人生" autocomplete="off">
+          <div class="err hidden" id="e-name"></div></div>
+        <label class="check" id="w-dailychk"><input type="checkbox" id="f-daily"${t.daily ? " checked" : ""}><span>毎日</span></label>
+        <div id="g-daily" class="duration times">
+          <div class="field"><label for="f-from">開始</label><input id="f-from" type="time" value="${timeVal(d.start_min)}"></div>
+          <div class="field"><label for="f-to">終了</label><input id="f-to" type="time" value="${timeVal(d.end_min)}"></div>
+        </div>
+        <div id="g-dur" class="duration">
+          <div class="field"><label for="f-value">時間</label>
+            <input id="f-value" type="number" inputmode="numeric" min="1" step="1" value="${value}"></div>
+          <div class="field"><label for="f-unit">単位</label>
+            <select id="f-unit">${options(UNIT_LABEL, t.unit)}</select></div>
+        </div>
+        <div id="w-since">
+          <label class="check"><input type="checkbox" id="f-since"${t.start_at ? " checked" : ""}><span>開始日を指定</span></label>
+          <div class="field" id="g-since"><label for="f-date">開始日</label>
+            <input id="f-date" type="date" max="${today}" value="${t.start_at ? dateVal(t.start_at) : today}"></div>
+        </div>
+        <div class="err hidden" id="e-value" style="margin-top:-8px;margin-bottom:12px"></div>
+        <div class="field"><label for="f-notify">通知</label>
+          <select id="f-notify">${options(NOTIFY_LABEL, t.notify)}</select></div>
+        <div class="field"><label for="f-segments">メモリ数</label>
+          <input id="f-segments" type="number" min="2" max="60" step="1" inputmode="numeric" value="${t.segments}">
+          <div class="err hidden" id="e-segments"></div></div>
+        <div class="field plain"><label>色</label>
+          <div class="swatches" role="radiogroup" aria-label="色" id="f-color">${swatches(t.color)}</div></div>
+        ${PLATFORM === "mac" ? `<label class="check"><input type="checkbox" id="f-bar"${t.show_in_bar ? " checked" : ""}><span>メニューバーに表示</span></label><label class="check" id="w-pin"><input type="checkbox" id="f-pin"${t.pin_float ? " checked" : ""}><span>フローティングにボタンを出す</span></label>` : ""}
+        <div class="buttons">
+          ${isNew ? "" : '<button type="button" class="btn destructive" data-delete>削除</button>'}
+          <span class="spacer"></span>
+          <button type="button" class="btn" data-close>キャンセル</button>
+          <button type="submit" class="btn primary">保存</button>
+        </div>`, true);
+  const $ = id => form.querySelector("#" + id);
+  // 名前・毎日・開始日を持つのは期間タイマーだけ。毎日と開始日は同時に使えない
+  const sync = () => {
+    const period = $("f-period").checked;
+    const daily = period && $("f-daily").checked;
+    $("w-name").classList.toggle("hidden", !period);
+    $("w-pin")?.classList.toggle("hidden", period);
+    $("w-dailychk").classList.toggle("hidden", !period);
+    $("g-daily").classList.toggle("hidden", !daily);
+    $("g-dur").classList.toggle("hidden", daily);
+    $("w-since").classList.toggle("hidden", !period || daily);
+    $("g-since").classList.toggle("hidden", !$("f-since").checked);
+    $("f-daily").disabled = $("f-since").checked;
+  };
+  $("f-period").addEventListener("change", () => {
+    // 期間タイマーには「毎日」か「開始日」のどちらかが要る。決まっていなければ開始日を入れておく
+    if ($("f-period").checked && !$("f-daily").checked && !$("f-since").checked) $("f-since").checked = true;
+    sync();
+  });
+  $("f-daily").addEventListener("change", sync);
+  $("f-since").addEventListener("change", sync);
+  $("f-color").addEventListener("click", e => {
+    const b = e.target.closest("[data-sw]");
+    if (b) $("f-color").querySelectorAll("[data-sw]").forEach(x => x.setAttribute("aria-checked", String(x === b)));
+  });
+  sync();
+  form.addEventListener("submit", e => { e.preventDefault(); save(t, isNew); });
+  form.querySelector("[data-delete]")?.addEventListener("click", () => remove(t));
+}
+
+// 終了日時を決めて、いますぐ始める1回きりのタイマー
+function openUntil() {
+  const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0);
+  const form = sheet("終了日時を決めて始める", `
+        <div class="field"><label for="f-end">終了日時</label>
+          <input id="f-end" type="datetime-local" value="${dateTimeVal(d)}">
+          <div class="err hidden" id="e-end"></div></div>
+        <div class="buttons"><span class="spacer"></span>
+          <button type="button" class="btn" data-close>キャンセル</button>
+          <button type="submit" class="btn primary">始める</button></div>`, true);
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+    const v = form.querySelector("#f-end").value;
+    const endAt = v ? Math.floor(new Date(v).getTime() / 1000) : NaN;
+    if (!Number.isFinite(endAt)) return showErr("e-end", "終了日時を入れてください");
+    if (endAt <= nowSecs() + 60) return showErr("e-end", "今から1分より先の日時にしてください");
+    try { await invoke("start_until", { endAt }); closeSheet(); await refresh(); }
+    catch (err) { showErr("e-end", String(err)); }
+  });
+  form.querySelector("#f-end").focus();
+}
+
+function openSettings() {
+  const seg = () => Object.entries(THEME_LABEL).map(([v, l]) =>
+    `<button type="button" data-theme-opt="${v}" aria-pressed="${getTheme() === v}">${l}</button>`).join("");
+  sheet("設定", `
+        <div class="field plain"><label>外観</label>
+          <div class="segmented" role="group" aria-label="外観">${seg()}</div></div>
+        <div class="field plain"><label for="gimmick">完了ギミック</label>
+          <select id="gimmick">${options({ off: "なし", boom: "💥 爆発", party: "🎉🎊 お祝い", fire: "🔥 燃え尽き", flower: "🌸 花（タイマーの色で変わる）", custom: "自由に選ぶ" }, view.done_gimmick.kind)}</select>
+          <input id="gimmick-emoji" aria-label="完了ギミックの絵文字" aria-describedby="e-gimmick" placeholder="絵文字を 1 つ" value="${esc(view.done_gimmick.emoji || "")}"${view.done_gimmick.kind === "custom" ? "" : " hidden"}>
+          <div class="err hidden" id="e-gimmick" role="alert"></div></div>
+        ${PLATFORM === "mac" ? `<label class="check"><input type="checkbox" id="float-fixed"${floatFixed() ? " checked" : ""}><span>フローティングの高さを固定</span></label>` : ""}
+        <div class="buttons"><span class="spacer"></span>
+          <button type="button" class="btn primary" data-close>完了</button></div>`);
+  const gimmick = sheetRoot.querySelector("#gimmick");
+  const emoji = sheetRoot.querySelector("#gimmick-emoji");
+  const saveGimmick = async value => {
+    try { await invoke("set_done_gimmick", { gimmick: value }); view.done_gimmick = value; }
+    catch (e) { toast(String(e), 3000); }
+  };
+  gimmick.addEventListener("change", () => {
+    emoji.hidden = gimmick.value !== "custom";
+    emoji.setAttribute("aria-invalid", "false");
+    showErr("e-gimmick", "");
+    if (gimmick.value === "custom") emoji.focus();
+    else saveGimmick({ kind: gimmick.value });
+  });
+  emoji.addEventListener("change", () => {
+    const v = emoji.value.trim();
+    const valid = [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(v)].length === 1;
+    emoji.setAttribute("aria-invalid", String(!valid));
+    showErr("e-gimmick", valid ? "" : "見た目で1文字にしてください");
+    if (valid) saveGimmick({ kind: "custom", emoji: v });
+  });
+  sheetRoot.querySelector("#float-fixed")?.addEventListener("change", e => setFloatFixed(e.target.checked));
+  sheetRoot.querySelectorAll("[data-theme-opt]").forEach(b => b.addEventListener("click", () => {
+    setTheme(b.dataset.themeOpt);
+    sheetRoot.querySelectorAll("[data-theme-opt]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  }));
+}
+
+const KEYS = [
+  ["j / k", "下／上の行へ"],
+  ["gg / G", "先頭／末尾へ"],
+  ["Enter / Space", "（行で）開始・停止"],
+  ["i", "付箋を書く（Enter で確定、Esc で戻す）"],
+  ["u", "終了日時を決めて始める"],
+  ["e", "タイマーの編集"],
+  ["o", "タイマーを追加"],
+  ["f", "フローティング表示にする（Mac）"],
+  ["dd", "タイマーの削除（y で確定）"],
+  [",", "設定を開く"],
+  ["?", "キーの一覧"],
+];
+function openKeys() {
+  sheet("キー操作", `<div class="keys-scroll"><table class="keys">
+      ${KEYS.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</table></div>
+      <div class="buttons"><span class="spacer"></span><button type="button" class="btn primary" data-close>閉じる</button></div>`);
+}
+
+async function persist(timers) {
+  try {
+    await invoke("save_timers", { timers });
+    closeSheet();
+    await refresh();
+  } catch (e) {
+    // e-name は期間タイマーでないと隠れるので、いつも見える e-value に出す
+    showErr("e-value", String(e));
+  }
+}
+
+function save(orig, isNew) {
+  const $ = id => document.getElementById(id);
+  const period = $("f-period").checked;
+  const name = period ? $("f-name").value.trim() : "";
+  const notify = $("f-notify").value;
+  const segments = Number($("f-segments").value);
+  const validSegments = $("f-segments").value !== "" && Number.isInteger(segments) && segments >= 2 && segments <= 60;
+  $("f-segments").setAttribute("aria-invalid", String(!validSegments));
+  showErr("e-segments", validSegments ? "" : "メモリ数は2〜60で入れてください");
+  const color = $("f-color").querySelector('[aria-checked="true"]')?.dataset.sw || null;
+  const show_in_bar = PLATFORM === "mac" ? $("f-bar").checked : !!orig.show_in_bar;
+  let ok = validSegments, duration_secs, unit, daily = null, start_at = null;
+  showErr("e-name", ""); showErr("e-value", "");
+  if (period && !name) { showErr("e-name", "名前を入力してください"); ok = false; }
+  if (period && $("f-daily").checked) {
+    if (!$("f-from").value || !$("f-to").value) { showErr("e-value", "開始と終了の時刻を入れてください"); ok = false; }
+    else {
+      daily = { start_min: parseTime($("f-from").value), end_min: parseTime($("f-to").value) };
+      if (daily.start_min === daily.end_min) { showErr("e-value", "開始と終了は別の時刻にしてください"); ok = false; }
+      duration_secs = dailyLen(daily); unit = "min";
+    }
+  } else {
+    const value = Number($("f-value").value);
+    unit = $("f-unit").value;
+    duration_secs = value * FACTOR[unit];
+    if (!Number.isInteger(value) || value < 1) { showErr("e-value", "1以上の整数を入力してください"); ok = false; }
+    else if (duration_secs > MAX_SECS) { showErr("e-value", "100年以内にしてください"); ok = false; }
+    else if (period) {
+      if (!$("f-since").checked) { showErr("e-value", "「毎日」か「開始日を指定」を選んでください"); ok = false; }
+      else {
+        const v = $("f-date").value;
+        if (!v) { showErr("e-value", "開始日を入れてください"); ok = false; }
+        else {
+          const [y, m, d] = v.split("-").map(Number);
+          start_at = new Date(y, m - 1, d).getTime() / 1000;
+          if (start_at > nowSecs()) { showErr("e-value", "開始日に未来の日付は使えません"); ok = false; }
+          else if (start_at + duration_secs <= nowSecs()) { showErr("e-value", "この開始日ではもう終わっています"); ok = false; }
+        }
+      }
+    }
+  }
+  if (!ok) return;
+  const pin_float = PLATFORM === "mac" ? !period && $("f-pin").checked : !!orig.pin_float;
+  const item = { id: orig.id, name, duration_secs, unit, notify, show_in_bar, start_at, daily, color, segments, pin_float };
+  const timers = isNew ? [...view.timers, item] : view.timers.map(t => (t.id === orig.id ? item : t));
+  persist(timers);
+}
+
+function remove(orig) {
+  persist(view.timers.filter(t => t.id !== orig.id));
+}
+
+// ================= キー操作（vim風。シートを開いていないときだけ） =================
+let kbd = false;          // キーで操作し始めたら選択枠を出す
+let prev = "", prevAt = 0;
+let confirmFn = null;     // dd の確認待ち
+function confirmAsk(text, fn) { confirmFn = fn; toast(`${text} y/n`, 0); }
+
+document.addEventListener("keydown", e => {
+  if (FLOAT) return;
+  if (e.key === "Escape" && sheetOpen) return closeSheet();
+  const tag = e.target.tagName;
+  if (sheetOpen || e.target.isContentEditable || tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (confirmFn) {
+    e.preventDefault();
+    const fn = confirmFn; confirmFn = null; toast("");
+    if (e.key === "y") fn();
+    return;
+  }
+  const k = e.key;
+  const two = prev === k && Date.now() - prevAt < 600;
+  prev = two ? "" : k; prevAt = Date.now();
+  const cur = items[sel];
+  const t = cur?.timer;
+  const move = i => { kbd = true; sel = i; markSel(); main.querySelector(".sel")?.scrollIntoView({ block: "nearest" }); };
+  const done = () => e.preventDefault();
+  switch (k) {
+    case "j": return done(), move(sel + 1);
+    case "k": return done(), move(sel - 1);
+    case "G": return done(), move(items.length - 1);
+    case "g": if (two) move(0); return done();
+    case "o": return done(), openSheet(null);
+    case "i": return done(), noteText.focus(), caretToEnd();
+    case "u": return done(), openUntil();
+    case "f": if (PLATFORM === "mac") switchView("float"); return done();
+    case ",": return done(), openSettings();
+    case "?": return done(), openKeys();
+  }
+  if (cur?.kind === "row") {
+    if (k === "Enter" || k === " ") {
+      done();
+      if (!t) return toggle(cur.run.def_id, true);   // 1回きり：停止
+      if (t.daily && !cur.run) return toast("毎日タイマーは自動で始まります");
+      return toggle(t.id, !!cur.run);
+    }
+    if (t && k === "e") return done(), openSheet(t);
+    if (t && k === "d" && two) return done(), confirmAsk(`「${isPeriod(t) ? t.name : lengthText(t)}」を削除しますか？`, () => remove(t));
+  }
+});
+
+if (FLOAT) {
+  renderFloat();
+  addEventListener("resize", renderFloat);
+  setInterval(renderFloat, 1000);
+} else {
+  refresh();
+  setInterval(refresh, 1000);
+}
+</script>
+</body>
+</html>
