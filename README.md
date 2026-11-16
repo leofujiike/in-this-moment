@@ -1,9 +1,25 @@
-# In This Moment
+<p align="center">
+<img src="src-tauri/icons/icon.png" width="128" height="128" alt="In This Moment のアイコン"/>
+</p>
+
+<h1 align="center">In This Moment</h1>
+<p align="center">
+<img src="https://img.shields.io/github/v/release/leofujiike/in-this-moment?display_name=tag" alt="最新リリース"/> <img src="https://img.shields.io/github/license/leofujiike/in-this-moment" alt="ライセンス"/>
+</p>
+
+## 概要
 
 目の前の数分から人生まで、あらゆる時間の残りを常時フローティングのブロックメーターで見せ続ける付箋タイマー。
 
 付箋に「いま何をやるか」を書き、30分・5分などのプリセットや「終了日時を決めて始める」1回きりのタイマーで、残り時間をブロックのメーターで表示・通知する。メーターのメモリ数はタイマーごとに 2〜60 で設定できる。1日・1年・人生のような長い期間は名前付きの期間タイマーで持つ。
+
 Mac はメニューバー常駐＋常に前面のフローティング表示、Android は一覧画面＋予約通知。
+
+最新版は [Releases](https://github.com/leofujiike/in-this-moment/releases/latest) からダウンロードできます（Mac・Apple Silicon）。
+
+<p align="center">
+<img src="docs/demo.gif" alt="In This Moment の操作デモ" width="500"/>
+</p>
 
 ## インストール
 
