@@ -7,11 +7,18 @@ Mac はメニューバー常駐＋常に前面のフローティング表示、A
 
 ## インストール
 
-配布用のビルド済みアプリはまだありません。ソースからビルドして使います。
+### Mac（Apple Silicon）：ビルド済みアプリ
 
-### Mac
+[Releases](https://github.com/leofujiike/in-this-moment/releases/latest) から `In-This-Moment-v*-macos-arm64.zip` をダウンロードして展開し、`In This Moment.app` を「アプリケーション」フォルダへ移動します。
 
-必要なもの：Xcode Command Line Tools、Rust、Node.js
+Apple の公証を受けていないため、初回は「Apple は検証できませんでした」と表示されて開けません。次のどちらかで開けます。
+
+- 一度開こうとしたあと、システム設定 → プライバシーとセキュリティ → 下部の「このまま開く」を押す
+- ターミナルで `xattr -dr com.apple.quarantine "/Applications/In This Moment.app"` を実行する
+
+### Mac：ソースからビルド
+
+Intel Mac の場合や、自分でビルドしたい場合はこちら。必要なもの：Xcode Command Line Tools、Rust、Node.js
 
     git clone https://github.com/leofujiike/in-this-moment.git
     cd in-this-moment
